@@ -242,3 +242,15 @@ request passed the trusted remote Origin/CSRF checks. HTTPS443 still proxies to
 surveillance port8766; public Funnel is not enabled. Scheduling and RF remain
 enabled with a current worker heartbeat. The verification was from Argus; testing
 on the phone over mobile data is the final user-side connectivity check.
+
+
+## Direct LAN access / tellstick hostname
+
+Use **http://tellstick.local/** on the home network. A persistent user service
+publishes this IPv4 address through Avahi mDNS; the controller explicitly trusts
+this HTTP origin and its port8768 variant. Actual name resolution, HTTP/API access,
+and Origin/CSRF validation passed on Argus. Phone testing remains pending.
+Direct IP access at http://192.168.1.149/ still works. Router DNS and IPv6 need no
+changes for this approach. See [LAN access instructions](LAN-ACCESS.md). Existing
+private Tailscale and surveillance routes are preserved. The controller itself
+continues to bind only to loopback.

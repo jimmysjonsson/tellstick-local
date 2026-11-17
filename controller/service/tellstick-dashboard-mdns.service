@@ -1,0 +1,13 @@
+[Unit]
+Description=Publish tellstick.local for the home dashboard
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/avahi-publish-address --no-fail --no-reverse tellstick.local 192.168.1.149
+Restart=always
+RestartSec=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=default.target

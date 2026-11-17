@@ -1,0 +1,14 @@
+[Unit]
+Description=TellStick dashboard listeners on Argus home LAN
+
+[Socket]
+ListenStream=192.168.1.149:80
+ListenStream=192.168.1.149:8768
+FreeBind=yes
+NoDelay=yes
+IPAddressDeny=any
+IPAddressAllow=localhost
+IPAddressAllow=192.168.1.0/24
+
+[Install]
+WantedBy=sockets.target

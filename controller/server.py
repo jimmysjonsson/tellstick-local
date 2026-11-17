@@ -107,10 +107,25 @@ def trusted_https_origin(value):
     return 'https://'+host+(':'+str(port) if port and port!=443 else '')
 
 
-def handler_for(controller,authority,trusted_origins=()):
+def trusted_lan_origin(value):
+    """Explicit HTTP origin for a trusted LAN proxy; never inferred from headers."""
+    try:
+        url=urlsplit(value)
+        port=url.port
+    except ValueError:
+        raise ValueError('Invalid trusted LAN origin') from None
+    if (url.scheme!='http' or not url.hostname or url.username is not None or
+        url.password is not None or url.path not in ('','/') or url.query or url.fragment or
+        not re.fullmatch(r'[A-Za-z0-9.-]+',url.hostname) or port==0):
+        raise ValueError('LAN origins must be exact HTTP URLs without credentials or paths')
+    return 'http://'+url.hostname.lower()+(':'+str(port) if port and port!=80 else '')
+
+
+def handler_for(controller,authority,trusted_origins=(),trusted_lan_origins=()):
     csrf=secrets.token_urlsafe(32)
     origins={'http://'+authority,'http://localhost:'+authority.rsplit(':',1)[1]}
     origins.update(trusted_https_origin(value) for value in trusted_origins)
+    origins.update(trusted_lan_origin(value) for value in trusted_lan_origins)
     hosts={authority.lower(),'localhost:'+authority.rsplit(':',1)[1]}
     hosts.update(urlsplit(value).netloc for value in origins)
     class Handler(BaseHTTPRequestHandler):
@@ -166,6 +181,8 @@ def main():
     parser.add_argument('--init-only',action='store_true')
     parser.add_argument('--trusted-origin',action='append',type=trusted_https_origin,default=[],
                         help='Exact additional HTTPS origin for a trusted reverse proxy')
+    parser.add_argument('--trusted-lan-origin',action='append',type=trusted_lan_origin,default=[],
+                        help='Exact additional HTTP origin for a trusted LAN proxy')
     args=parser.parse_args()
     os.umask(0o077)
     controller=Controller(args.db)
@@ -176,7 +193,7 @@ def main():
     if not controller.store.setting('imported') and not args.init_only:raise SystemExit('Import the private account export before starting')
     if args.init_only:
         print('Controller database initialized.');return
-    with ThreadingHTTPServer(('127.0.0.1',args.port),handler_for(controller,'127.0.0.1:'+str(args.port),args.trusted_origin)) as server:
+    with ThreadingHTTPServer(('127.0.0.1',args.port),handler_for(controller,'127.0.0.1:'+str(args.port),args.trusted_origin,args.trusted_lan_origin)) as server:
         server.daemon_threads=True
         controller.start(receive=not args.no_receiver)
         def stop(*args):

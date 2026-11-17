@@ -1,0 +1,19 @@
+[Unit]
+Description=Proxy home LAN dashboard requests to the local TellStick controller
+Requires=tellstick-dashboard-lan.socket
+After=tellstick-dashboard-lan.socket
+
+[Service]
+ExecStart=/usr/lib/systemd/systemd-socket-proxyd 127.0.0.1:8768
+DynamicUser=yes
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+IPAddressDeny=any
+IPAddressAllow=localhost
+IPAddressAllow=192.168.1.0/24
+Restart=on-failure
+RestartSec=2

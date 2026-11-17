@@ -6,7 +6,16 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=/opt/tellstick/tellstick-local
-ExecStart=/opt/tellstick/tellstick-local/.venv/bin/python -m controller.server --trusted-origin=https://argus.tail265095.ts.net:8443
+ExecStart=/opt/tellstick/tellstick-local/.venv/bin/python -m controller.server \
+  --trusted-origin=https://argus.tail265095.ts.net:8443 \
+  --trusted-lan-origin=http://192.168.1.149 \
+  --trusted-lan-origin=http://tellstick \
+  --trusted-lan-origin=http://tellstick.lan \
+  --trusted-lan-origin=http://tellstick.local \
+  --trusted-lan-origin=http://192.168.1.149:8768 \
+  --trusted-lan-origin=http://tellstick:8768 \
+  --trusted-lan-origin=http://tellstick.lan:8768 \
+  --trusted-lan-origin=http://tellstick.local:8768
 Restart=on-failure
 RestartSec=5
 UMask=0077

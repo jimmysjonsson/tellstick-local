@@ -442,3 +442,11 @@ also completed successfully. Physical controls and the 42 active schedules are n
 enabled. 72 unit tests pass; encoders were additionally compared against the pinned
 original C++ implementation in 72 synthetic cases. Earlier RF-disabled notes above
 refer to the preparation stages, not the current service state.
+
+
+Direct home-LAN dashboard access is enabled at **http://tellstick.local/** through
+a dedicated systemd proxy and persistent Avahi mDNS announcement. Argus resolution,
+HTTP/API access, and Origin/CSRF validation are verified; phone testing is pending.
+No per-device DNS or router DNS/IPv6 changes are required. See
+[LAN access instructions](controller/LAN-ACCESS.md). Direct IP access remains
+http://192.168.1.149/. Tailscale and surveillance configuration are unchanged.
