@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tellstick-local"
+version = "0.1.0"
+description = "Local discovery and receive-only event monitoring for TellStick Net"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+export = ["requests", "oauthlib"]
+controller = ["astral==3.2"]
+
+[project.scripts]
+tellstick-local = "tellstick_local.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["tellstick_local*", "controller*"]
+
+[tool.setuptools.package-data]
+controller = ["static/*", "service/*.service"]

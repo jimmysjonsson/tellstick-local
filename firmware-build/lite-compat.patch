@@ -1,0 +1,462 @@
+--- a/firmware/discovery.c	1970-01-01 00:00:00 +0000
++++ b/firmware/discovery.c	1970-01-01 00:00:00 +0000
+@@ -1,3 +1,5 @@
++/* Lite string compatibility */
++static const char lite_string_0[] = "TellStickNet:";
+ //
+ // Copyright (C) 2012 Telldus Technologies AB. All rights reserved.
+ //
+@@ -13,6 +15,8 @@
+ 
+ #define DISCOVERY_PORT	30303
+ extern NODE_INFO remoteNode;
++
++static const char lite_version[] = FIRMWARE_VERSION;
+ 
+ void discoveryTask() {
+ 	static enum {
+@@ -62,7 +66,7 @@
+ 				return;
+ 			}
+ 
+-			UDPPutROMString("TellStickNet:");
++			UDPPutROMString(lite_string_0);
+ 			// Convert the MAC address bytes to hex (text) and then send it
+ 			for(i=0;i<6;++i) {
+ 				UDPPut(btohexa_high(AppConfig.MyMACAddr.v[i]));
+@@ -71,7 +75,7 @@
+ 			UDPPut(':');
+ 			UDPPutString(config.secret);
+ 			UDPPut(':');
+-			UDPPutROMString(FIRMWARE_VERSION);
++			UDPPutROMString(lite_version);
+ 
+ 			// Send the packet
+ 			UDPFlush();
+--- a/firmware/message.c	1970-01-01 00:00:00 +0000
++++ b/firmware/message.c	1970-01-01 00:00:00 +0000
+@@ -1,3 +1,5 @@
++static const char lite_data[] = "Data";
++static const char lite_raw_data[] = "RawData";
+ //
+ // Copyright (C) 2012 Telldus Technologies AB. All rights reserved.
+ //
+@@ -20,7 +22,7 @@
+ 	printf("+R");
+ #endif
+ 	LMClear();
+-	LMAppendString("Data");
++	LMAppendString(lite_data);
+ 	LMStartHash();
+ }
+ 
+@@ -29,7 +31,7 @@
+ 	printf("+RAW");
+ #endif
+ 	LMClear();
+-	LMAppendString("RawData");
++	LMAppendString(lite_raw_data);
+ 	LMStartHash();
+ }
+ 
+--- a/firmware/tellsticknet.c	1970-01-01 00:00:00 +0000
++++ b/firmware/tellsticknet.c	1970-01-01 00:00:00 +0000
+@@ -1,3 +1,21 @@
++/* Lite string compatibility */
++static const char lite_string_0[] = "P";
++static const char lite_string_1[] = "R";
++static const char lite_string_2[] = "protocol";
++static const char lite_string_3[] = "model";
++static const char lite_string_4[] = "arctech";
++static const char lite_string_5[] = "selflearning";
++static const char lite_string_6[] = "S";
++static const char lite_string_7[] = "ip";
++static const char lite_string_8[] = "netmask";
++static const char lite_string_9[] = "gateway";
++static const char lite_string_10[] = "dns1";
++static const char lite_string_11[] = "dns2";
++static const char lite_string_12[] = "reglistener";
++static const char lite_string_13[] = "send";
++static const char lite_string_14[] = "setip";
++static const char lite_string_15[] = "saveip";
++static const char lite_string_16[] = "disconnect";
+ //
+ // Copyright (C) 2012 Telldus Technologies AB. All rights reserved.
+ //
+@@ -74,27 +92,27 @@
+ 		return;
+ 	}
+ 
+-	if (LMFindHashString("P")) {
++	if (LMFindHashString(lite_string_0)) {
+ 		pause = LMTakeInt();
+ 	}
+-	if (LMFindHashString("R")) {
++	if (LMFindHashString(lite_string_1)) {
+ 		repeats = LMTakeInt();
+ 	}
+ 
+-	if (LMFindHashString("protocol")) {
++	if (LMFindHashString(lite_string_2)) {
+ 		LMTakeString(&protocol, sizeof(protocol));
+ 
+-		if (LMFindHashString("model")) {
++		if (LMFindHashString(lite_string_3)) {
+ 			LMTakeString(&model, sizeof(model));
+ 		}
+-		if (strcmp(protocol, "arctech") != 0 || strcmp(model, "selflearning") != 0) {
++		if (strcmp(protocol, lite_string_4) != 0 || strcmp(model, lite_string_5) != 0) {
+ 			return;
+ 		}
+ 		sendArctechSelflearning();
+ 		return;
+ 	}
+ 
+-	if (!LMFindHashString("S")) {
++	if (!LMFindHashString(lite_string_6)) {
+ 		return;
+ 	}
+ 	if (!LMTakeString(&sendPacket, sizeof(sendPacket))) {
+@@ -136,7 +154,7 @@
+ 	if (!LMEnterHash()) {
+ 		return;
+ 	}
+-	if (!LMFindHashString("ip")) {
++	if (!LMFindHashString(lite_string_7)) {
+ 		return;
+ 	}
+ 	ip.Val = LMTakeInt();
+@@ -147,22 +165,22 @@
+ 		return;
+ 	}
+ 
+-	if (!LMFindHashString("netmask")) {
++	if (!LMFindHashString(lite_string_8)) {
+ 		return;
+ 	}
+ 	netmask.Val = LMTakeInt();
+ 
+-	if (!LMFindHashString("gateway")) {
++	if (!LMFindHashString(lite_string_9)) {
+ 		return;
+ 	}
+ 	gateway.Val = LMTakeInt();
+ 
+-	if (!LMFindHashString("dns1")) {
++	if (!LMFindHashString(lite_string_10)) {
+ 		return;
+ 	}
+ 	dns1.Val = LMTakeInt();
+ 
+-	if (!LMFindHashString("dns2")) {
++	if (!LMFindHashString(lite_string_11)) {
+ 		return;
+ 	}
+ 	dns2.Val = LMTakeInt();
+@@ -179,18 +197,18 @@
+ 	BYTE name[20] = "";
+ 
+ 	if (!LMTakeString(&name, sizeof(name))) {
+-		printf("Could not handle message (to long?)\r\n");
+-		return;
+-	}
+-	if (strcmp(name, "reglistener") == 0) {
++		(void)0; /* No diagnostic output in non-debug builds. */
++		return;
++	}
++	if (strcmp(name, lite_string_12) == 0) {
+ 		registerListener();
+-	} else if (strcmp(name, "send") == 0) {
++	} else if (strcmp(name, lite_string_13) == 0) {
+ 			send();
+-	} else if (strcmp(name, "setip") == 0) {
++	} else if (strcmp(name, lite_string_14) == 0) {
+ 		setIp();
+-	} else if (strcmp(name, "saveip") == 0) {
++	} else if (strcmp(name, lite_string_15) == 0) {
+ 		saveIp();
+-	} else if (strcmp(name, "disconnect") == 0) {
++	} else if (strcmp(name, lite_string_16) == 0) {
+ 		Reset();
+ 	}
+ }
+--- a/firmware/transmit_arctech.c	1970-01-01 00:00:00 +0000
++++ b/firmware/transmit_arctech.c	1970-01-01 00:00:00 +0000
+@@ -1,3 +1,7 @@
++/* Lite string compatibility */
++static const char lite_string_0[] = "house";
++static const char lite_string_1[] = "unit";
++static const char lite_string_2[] = "method";
+ //
+ // Copyright (C) 2012 Telldus Technologies AB. All rights reserved.
+ //
+@@ -95,15 +99,15 @@
+ }
+ 
+ void sendArctechSelflearning() {
+-	if (!LMFindHashString("house")) {
++	if (!LMFindHashString(lite_string_0)) {
+ 		return;
+ 	}
+ 	house = LMTakeInt();
+-	if (!LMFindHashString("unit")) {
++	if (!LMFindHashString(lite_string_1)) {
+ 		return;
+ 	}
+ 	unit = LMTakeInt();
+-	if (!LMFindHashString("method")) {
++	if (!LMFindHashString(lite_string_2)) {
+ 		return;
+ 	}
+ 	method = LMTakeInt();
+--- a/rf/arctech.c	1970-01-01 00:00:00 +0000
++++ b/rf/arctech.c	1970-01-01 00:00:00 +0000
+@@ -1,3 +1,14 @@
++/* Lite string compatibility */
++static const char lite_string_0[] = "protocol";
++static const char lite_string_1[] = "arctech";
++static const char lite_string_2[] = "model";
++static const char lite_string_3[] = "codeswitch";
++static const char lite_string_4[] = "data";
++static const char lite_string_5[] = "protocol";
++static const char lite_string_6[] = "arctech";
++static const char lite_string_7[] = "model";
++static const char lite_string_8[] = "selflearning";
++static const char lite_string_9[] = "data";
+ #include "arctech.h"
+ #include "receive.h"
+ #include "message.h"
+@@ -58,9 +69,9 @@
+ 	}
+ 
+ 	rfMessageBeginRaw();
+-	rfMessageAddString("protocol", "arctech");
+-	rfMessageAddString("model", "codeswitch");
+-	rfMessageAddLong("data", data);
++	rfMessageAddString(lite_string_0, lite_string_1);
++	rfMessageAddString(lite_string_2, lite_string_3);
++	rfMessageAddLong(lite_string_4, data);
+ 	rfMessageEnd(2);
+ 
+ 	return 1;
+@@ -115,9 +126,9 @@
+ 	}
+ 
+ 	rfMessageBeginRaw();
+-	rfMessageAddString("protocol", "arctech");
+-	rfMessageAddString("model", "selflearning");
+-	rfMessageAddLong("data", data);
++	rfMessageAddString(lite_string_5, lite_string_6);
++	rfMessageAddString(lite_string_7, lite_string_8);
++	rfMessageAddLong(lite_string_9, data);
+ 	rfMessageEnd(2);
+ 
+ 	return 1;
+--- a/rf/everflourish.c	1970-01-01 00:00:00 +0000
++++ b/rf/everflourish.c	1970-01-01 00:00:00 +0000
+@@ -1,3 +1,7 @@
++/* Lite string compatibility */
++static const char lite_string_0[] = "protocol";
++static const char lite_string_1[] = "everflourish";
++static const char lite_string_2[] = "data";
+ #include "everflourish.h"
+ #include "receive.h"
+ #include "message.h"
+@@ -41,8 +45,8 @@
+ 	}
+ 	
+ 	rfMessageBeginRaw();
+-	rfMessageAddString("protocol", "everflourish");
+-	rfMessageAddLong("data", data);
++	rfMessageAddString(lite_string_0, lite_string_1);
++	rfMessageAddLong(lite_string_2, data);
+ 	rfMessageEnd(2);
+ 			
+ 	return 1;
+--- a/rf/fineoffset.c	1970-01-01 00:00:00 +0000
++++ b/rf/fineoffset.c	1970-01-01 00:00:00 +0000
+@@ -1,3 +1,9 @@
++/* Lite string compatibility */
++static const char lite_string_0[] = "class";
++static const char lite_string_1[] = "sensor";
++static const char lite_string_2[] = "protocol";
++static const char lite_string_3[] = "fineoffset";
++static const char lite_string_4[] = "data";
+ #include "fineoffset.h"
+ #include "crc.h"
+ #include "receive.h"
+@@ -60,9 +66,9 @@
+ 		return 0; //checksum did not match
+ 	}
+ 	rfMessageBeginRaw();
+-		rfMessageAddString("class", "sensor");
+-		rfMessageAddString("protocol", "fineoffset");
+-		rfMessageAddHexString("data", buffer, DATA_LENGTH);
++		rfMessageAddString(lite_string_0, lite_string_1);
++		rfMessageAddString(lite_string_2, lite_string_3);
++		rfMessageAddHexString(lite_string_4, buffer, DATA_LENGTH);
+ 	rfMessageEnd(1);
+ 	return 1;
+ }
+--- a/rf/hasta.c	1970-01-01 00:00:00 +0000
++++ b/rf/hasta.c	1970-01-01 00:00:00 +0000
+@@ -1,3 +1,14 @@
++/* Lite string compatibility */
++static const char lite_string_0[] = "protocol";
++static const char lite_string_1[] = "hasta";
++static const char lite_string_2[] = "model";
++static const char lite_string_3[] = "selflearning";
++static const char lite_string_4[] = "data";
++static const char lite_string_5[] = "protocol";
++static const char lite_string_6[] = "hasta";
++static const char lite_string_7[] = "model";
++static const char lite_string_8[] = "selflearningv2";
++static const char lite_string_9[] = "data";
+ #include "hasta.h"
+ #include "receive.h"
+ #include "message.h"
+@@ -192,9 +203,9 @@
+ 		clearHasta();
+ 
+ 		rfMessageBeginRaw();
+-			rfMessageAddString("protocol", "hasta");
+-			rfMessageAddString("model", "selflearning");
+-			rfMessageAddLong("data", temptotalhastadata);
++			rfMessageAddString(lite_string_0, lite_string_1);
++			rfMessageAddString(lite_string_2, lite_string_3);
++			rfMessageAddLong(lite_string_4, temptotalhastadata);
+ 		rfMessageEnd(1);
+ 		return;
+ 	}
+@@ -211,9 +222,9 @@
+ 		}
+ 
+ 		rfMessageBeginRaw();
+-			rfMessageAddString("protocol", "hasta");
+-			rfMessageAddString("model", "selflearningv2");
+-			rfMessageAddLong("data", temptotalhastadata);
++			rfMessageAddString(lite_string_5, lite_string_6);
++			rfMessageAddString(lite_string_7, lite_string_8);
++			rfMessageAddLong(lite_string_9, temptotalhastadata);
+ 		rfMessageEnd(1);
+ 	}
+ 	return;
+--- a/rf/mandolyn.c	1970-01-01 00:00:00 +0000
++++ b/rf/mandolyn.c	1970-01-01 00:00:00 +0000
+@@ -1,3 +1,10 @@
++/* Lite string compatibility */
++static const char lite_string_0[] = "class";
++static const char lite_string_1[] = "sensor";
++static const char lite_string_2[] = "protocol";
++static const char lite_string_3[] = "mandolyn";
++static const char lite_string_4[] = "model";
++static const char lite_string_5[] = "data";
+ #include "mandolyn.h"
+ #include "receive.h"
+ #include "message.h"
+@@ -60,10 +67,10 @@
+ 	}
+ 
+ 	rfMessageBeginRaw();
+-		rfMessageAddString("class", "sensor");
+-		rfMessageAddString("protocol", "mandolyn");
+-		rfMessageAddString("model", MODEL);
+-		rfMessageAddLong("data", data);
++		rfMessageAddString(lite_string_0, lite_string_1);
++		rfMessageAddString(lite_string_2, lite_string_3);
++		rfMessageAddString(lite_string_4, MODEL);
++		rfMessageAddLong(lite_string_5, data);
+ 	rfMessageEnd(1);
+ 	return 1;
+ }
+--- a/rf/oregon.c	1970-01-01 00:00:00 +0000
++++ b/rf/oregon.c	1970-01-01 00:00:00 +0000
+@@ -1,3 +1,10 @@
++/* Lite string compatibility */
++static const char lite_string_0[] = "class";
++static const char lite_string_1[] = "sensor";
++static const char lite_string_2[] = "protocol";
++static const char lite_string_3[] = "oregon";
++static const char lite_string_4[] = "model";
++static const char lite_string_5[] = "data";
+ #include "oregon.h"
+ #include "receive.h"
+ #include "message.h"
+@@ -166,10 +173,10 @@
+ 			if (length == 0) {
+ 				clearOregon();
+ 				rfMessageBeginRaw();
+-					rfMessageAddString("class", "sensor");
+-					rfMessageAddString("protocol", "oregon");
+-					rfMessageAddLong("model", id);
+-					rfMessageAddHexString("data", buffer, cnt);
++					rfMessageAddString(lite_string_0, lite_string_1);
++					rfMessageAddString(lite_string_2, lite_string_3);
++					rfMessageAddLong(lite_string_4, id);
++					rfMessageAddHexString(lite_string_5, buffer, cnt);
+ 				rfMessageEnd(1);
+ 			}
+ 
+--- a/rf/oregonv3.c	1970-01-01 00:00:00 +0000
++++ b/rf/oregonv3.c	1970-01-01 00:00:00 +0000
+@@ -1,3 +1,10 @@
++/* Lite string compatibility */
++static const char lite_string_0[] = "class";
++static const char lite_string_1[] = "sensor";
++static const char lite_string_2[] = "protocol";
++static const char lite_string_3[] = "oregon";
++static const char lite_string_4[] = "model";
++static const char lite_string_5[] = "data";
+ #include "oregonv3.h"
+ #include "receive.h"
+ #include "message.h"
+@@ -200,10 +207,10 @@
+ 				//whole payload is parsed (if length is known), or unknown length followed by silence
+ 				clearOregonV3();
+ 				rfMessageBeginRaw();
+-					rfMessageAddString("class", "sensor");
+-					rfMessageAddString("protocol", "oregon");
+-					rfMessageAddLong("model", id);
+-					rfMessageAddHexString("data", bufferV3, bufferCntV3);
++					rfMessageAddString(lite_string_0, lite_string_1);
++					rfMessageAddString(lite_string_2, lite_string_3);
++					rfMessageAddLong(lite_string_4, id);
++					rfMessageAddHexString(lite_string_5, bufferV3, bufferCntV3);
+ 				rfMessageEnd(1);
+ 				break;
+ 			}
+--- a/rf/x10.c	1970-01-01 00:00:00 +0000
++++ b/rf/x10.c	1970-01-01 00:00:00 +0000
+@@ -1,3 +1,7 @@
++/* Lite string compatibility */
++static const char lite_string_0[] = "protocol";
++static const char lite_string_1[] = "x10";
++static const char lite_string_2[] = "data";
+ #include "x10.h"
+ #include "receive.h"
+ #include "message.h"
+@@ -50,8 +54,8 @@
+ 	}
+ 
+ 	rfMessageBeginRaw();
+-	rfMessageAddString("protocol", "x10");
+-	rfMessageAddLong("data", code);
++	rfMessageAddString(lite_string_0, lite_string_1);
++	rfMessageAddLong(lite_string_2, code);
+ 	rfMessageEnd(2);
+ 	
+ 	return 1;
+--- a/tcpip/TCPIP Stack/Helpers.c	1970-01-01 00:00:00 +0000
++++ b/tcpip/TCPIP Stack/Helpers.c	1970-01-01 00:00:00 +0000
+@@ -245,9 +245,9 @@
+ 		// Time the duration of an A/D acquisition and conversion
+ 		TMR0H = 0x00;
+ 		TMR0L = 0x00;
+-		ADCON0bits.GO = 1;
++		ADCON0bits.GODONE = 1;
+ 		ClrWdt();
+-		while(ADCON0bits.GO);
++		while(ADCON0bits.GODONE);
+ 		((BYTE*)&wTime)[0] = TMR0L;
+ 		((BYTE*)&wTime)[1] = TMR0H;
+ 		w = LFSRRand();

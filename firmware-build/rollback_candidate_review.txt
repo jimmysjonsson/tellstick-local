@@ -1,0 +1,44 @@
+Candidate review — 2026-11-17
+
+Reviewed/rebuilt RX image SHA256:
+983d53973f77b717e18daf7b425895883b59ed015b8cbb8fe4643c9cc6ccb7a5
+Compiler: PICC18 9.65 Lite under the preserved Wine prefix.
+Rebuild reproduced the previous candidate HEX hash exactly.
+
+Memory: 67841 program bytes, 1824 RAM bytes. No overlap with observed bootloader
+or jump table, nor the wider 0x1D000–0x1FFF7 exclusion. Four configuration bytes
+match the physical readback. Application reset is a PIC18 GOTO.
+
+EEPROM: initAppConfig zeros RAM config and reads only six MAC bytes from address
+zero. Network settings use DHCP; secret/network fields are not read. Linked map
+contains EERandomRead1 and WriteI2C1 (I2C read-address transactions need bus writes),
+not persistent EEPROM byte/page-write operations. saveEEPROM/clearEEPROM removed.
+MAC location is assumed from public firmware; stock EEPROM layout remains unverified.
+Blank EEPROM MAC fallback remains inherited behavior, not hardware-validated.
+
+RF: source/link exclude RF-send implementation, timer-three transmit ISR, command
+send/dispatch and transmitter-activation routines. RF sender/antenna latches are
+set low in initTransmitter; receiver activation remains. GPIO latches are cleared
+before direction setup. Static review cannot certify electrical RF silence at
+power-on, during bootloader execution, or after any hardware/initialization fault.
+
+Local UDP42314 accepts only exact B:reglistener. Tests reject send/save-IP strings,
+NUL/trailing data and oversized requests. Event message generation has bounded,
+fail-closed output. Discovery uses LOCALONLY in place of the device secret.
+Remote reboot omitted: rollback entry depends on power-on recovery at 192.168.97.60,
+which has been verified with current firmware, not after installing this image.
+
+Build warnings retained in rx-link.log:
+- ETH97J60 receive-buffer boundary expression: constant operand and signedness.
+  No fix introduced; stack's existing expression is preserved.
+- TCPFindArrayEx local buffer warning: code fills buffer through TCPRAMCopy with
+  an integer-cast pointer. This may explain the compiler diagnostic, but it is
+  not dismissed as proven harmless. TCPFindArrayEx is absent from the final link map.
+- Lite compiler states whole-program PRO optimization is unavailable.
+No new compiler workaround or stack patch was made during this review.
+
+Host checks: 29 Python tests and 2 C behavioral tests pass. The offline package
+verifier passes, and deliberately corrupting a copied stock HEX is rejected.
+These tests do not validate timing, stack correctness on hardware, restore writes,
+or electrical behavior. Original firmware repository was unchanged (clean git status).
+No device commands or firmware writes were performed during package preparation.

@@ -1,0 +1,64 @@
+{
+  "firmware": {
+    "repository": "https://github.com/telldus/tellstick-net.git",
+    "revision": "fbeda657e9e1dfdd80a4d39cd43b2b7fa2d402da",
+    "status": "local source exported; original unchanged"
+  },
+  "cmake": {
+    "mirror": "https://github.com/antpata/telldus-common.git",
+    "revision": "0bbe97dd9dc98f54a09a4f6f60cb97d746b22691",
+    "status": "exact Git object recovered and exported"
+  },
+  "rf": {
+    "mirror": "https://github.com/antpata/telldus-common.git",
+    "revision": "3e76e2b34cfe94613c5f5aa840b0218515482c96",
+    "status": "exact Git object recovered and exported"
+  },
+  "tcpip": {
+    "original_repository": "http://git.telldus.com/telldus-common.git",
+    "revision": "aa640ce96c39704bd55fb7a828253f25ffcddedd",
+    "status": "Reconstructed with Microchip v5.42 from xioTechnologies/OSC-Sync-Master pinned source plus lite-compat.patch; original exact revision remains unavailable",
+    "fallback_references": [
+      {
+        "repository": "https://github.com/xioTechnologies/OSC-Sync-Master",
+        "revision": "38689c9e5fe4cfe11e6fa64df4507d19bb3445b1",
+        "path": "mla/Microchip",
+        "version": "5.42"
+      },
+      {
+        "repository": "https://github.com/mentatpsi/Microchip",
+        "revision": "ae5dabf9a9152953ea46f6de11a2b3c185535117",
+        "path": "Microchip",
+        "version": "5.42"
+      }
+    ]
+  },
+  "compiler": {
+    "name": "HI-TECH PICC18 PRO 9.65 Windows under Wine 9.0",
+    "vendor_url": "https://ww1.microchip.com/downloads/en/DeviceDoc/picc-18-pro_9.66.8870-linux.zip",
+    "status": "PICC18 9.65 Lite under Wine successfully compiled all 36 firmware/RF/TCPIP units and linked full offline image; PRO activation unsuccessful",
+    "archive_page": "https://www.microchip.com/en-us/tools-resources/archives/mplab-ecosystem",
+    "installer_sha256": "3fb9ec099b8dccbb90abd1ffaf8c33ee2b2a64d9031c69059f21709632e028ca",
+    "prefix": "firmware-work/wine-picc18"
+  },
+  "build": {
+    "date": "2026-11-17",
+    "mode": "Lite",
+    "program_bytes": 73135,
+    "ram_bytes": 2098,
+    "hex_sha256": "3e69cdf643708a2721b296fe1e5d5d3da5fc99df6afb9a45d3afd14a657c72ef",
+    "hardware_validated": false,
+    "flash_ready": false
+  },
+  "readonly_build": {
+    "date": "2026-11-17",
+    "profile": "X-RX1",
+    "program_bytes": 67841,
+    "ram_bytes": 1824,
+    "hex_sha256": "983d53973f77b717e18daf7b425895883b59ed015b8cbb8fe4643c9cc6ccb7a5",
+    "inferred_reserved_range": "0x1D000..0x1FFF7",
+    "flash_ready": false,
+    "hardware_validated": false,
+    "host_c_tests": 2
+  }
+}

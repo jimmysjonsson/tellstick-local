@@ -1,0 +1,17 @@
+[Unit]
+Description=Argus local TellStick controller and scheduler
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/tellstick/tellstick-local
+ExecStart=/opt/tellstick/tellstick-local/.venv/bin/python -m controller.server --trusted-origin=https://argus.tail265095.ts.net:8443
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target
