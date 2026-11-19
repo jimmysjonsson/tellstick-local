@@ -41,7 +41,26 @@ def ingest(store,engine,event,now=None):
                 readings[name]=dict(readings.get(name,{}),name=name,value=str(decoded[name]),lastUpdated=int(now),scale='0')
         sensor.update(data=list(readings.values()),lastUpdated=int(now),state_source='local RF')
         store.save('sensors',sensor)
+        store.record_sensor_reading(sensor['id'],now,decoded.get('temp'),decoded.get('humidity'))
         engine.signal('sensor',sensor,previous,now)
+
+
+def backfill_history(store):
+    """Recover only actual local readings in the bounded pre-history RF buffer."""
+    if store.setting('sensor_history_backfilled'):return
+    sensors=store.list('sensors')
+    with store.connect() as db:
+        frames=db.execute('SELECT received,data FROM observations ORDER BY received').fetchall()
+    cutoff=time.time()-90*86400
+    for frame in frames:
+        if frame['received']<cutoff:continue
+        fields=json.loads(frame['data'])
+        decoded=fineoffset(fields.get('data')) if fields.get('protocol')=='fineoffset' else None
+        if not decoded:continue
+        for sensor in sensors:
+            if sensor.get('protocol')=='fineoffset' and str(sensor.get('sensorId'))==decoded['sensorId']:
+                store.record_sensor_reading(sensor['id'],frame['received'],decoded.get('temp'),decoded.get('humidity'))
+    store.set('sensor_history_backfilled',True)
 
 
 def receiver_loop(store,engine,stop):

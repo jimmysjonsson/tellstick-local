@@ -13,10 +13,10 @@ import signal
 import sqlite3
 import threading
 import time
-from urllib.parse import urlsplit,unquote
+from urllib.parse import urlsplit,unquote,parse_qs
 
 from .core import Store,Engine,enabled,next_run,validate_event
-from .receiver import receiver_loop
+from .receiver import receiver_loop,backfill_history
 from .radio import RadioProvider
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -28,6 +28,7 @@ EXPORT=ROOT/'secrets/recovery/telldus-account-20261117T163843Z.json'
 class Controller:
     def __init__(self,path,*,provider=None):
         self.store=Store(path);self.engine=Engine(self.store,provider=provider or RadioProvider(self.store))
+        backfill_history(self.store)
         self.stop=threading.Event();self.threads=[]
 
     def start(self,receive=True):
@@ -64,7 +65,7 @@ class Controller:
             observations=[dict(r) for r in db.execute('SELECT id,received,kind,data FROM observations ORDER BY id DESC LIMIT 15')]
             for item in observations:item['data']=json.loads(item['data'])
         return {'devices':store.list('devices'),'sensors':store.list('sensors'),'schedules':schedules,'events':events,
-            'actions':actions,'observations':observations,'status':{
+            'actions':actions,'observations':observations,'dashboard':store.dashboard(),'status':{
                 'hardware_mode':store.setting('hardware_mode','receive-only'),'rf_enabled':bool(store.setting('rf_authorized',False) and store.setting('rf_enabled',False)),'scheduler_enabled':store.setting('scheduler_enabled',True),
                 'scheduler_heartbeat':store.setting('scheduler_heartbeat'),'scheduler_error':store.setting('scheduler_error'),
                 'rule_errors':store.setting('rule_errors',[]),
@@ -75,6 +76,9 @@ class Controller:
 
     def mutate(self,path,data):
         parts=path.strip('/').split('/')
+        if parts==['api','dashboard']:
+            if set(data)!={'items'}:raise ValueError('Invalid dashboard selection')
+            return {'items':self.store.save_dashboard(data['items'])}
         if parts==['api','command']:
             ids=self.engine.enqueue(str(data['deviceId']),data['method'],data.get('value',0))
             return {'queued':ids,'physical_control':bool(self.store.setting('rf_enabled',False))}
@@ -147,6 +151,16 @@ def handler_for(controller,authority,trusted_origins=(),trusted_lan_origins=()):
                 self.send(200,json.dumps(state).encode());return
             if path=='/api/health':
                 self.send(200,json.dumps({'ok':True,'heartbeat':controller.store.setting('scheduler_heartbeat'),'rf_enabled':bool(controller.store.setting('rf_enabled',False))}).encode());return
+            parts=path.strip('/').split('/')
+            if len(parts)==4 and parts[:2]==['api','sensors'] and parts[3]=='history':
+                try:
+                    query=parse_qs(urlsplit(self.path).query)
+                    hours=int(query.get('hours',['24'])[0])
+                    history=controller.store.sensor_history(unquote(parts[2]),hours)
+                    self.send(200,json.dumps(history).encode())
+                except (ValueError,TypeError):
+                    self.send(400,json.dumps({'error':'Invalid sensor or history range'}).encode())
+                return
             names={'/':'index.html','/app.js':'app.js','/style.css':'style.css'}
             if path not in names:self.send_error(404);return
             file=STATIC/names[path]

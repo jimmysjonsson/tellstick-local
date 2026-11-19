@@ -1,6 +1,7 @@
 # Argus local home controller
 
-Open **http://127.0.0.1:8768/** on Argus. The application runs locally and loads no
+Open **http://tellstick.local/** on your home network, or
+**http://127.0.0.1:8768/** on Argus. The application runs locally and loads no
 cloud services, external scripts, fonts or images. It is installed as
 `tellstick-controller.service` in Jimmy's systemd user manager, enabled at startup.
 User lingering is enabled so it continues after logout and starts at boot without
@@ -25,7 +26,8 @@ observed in person. DIM is quantized to the protocol's 16 brightness levels.
 
 RF commands use bounded pulse requests and a non-transmitting readiness probe.
 The firmware acknowledges completing transmission, not receiver state. Activity
-therefore records `sent`, and device state labels remain unconfirmed. A command
+therefore records `sent`; the compact device card shows its last recorded state,
+which is not proof that a receiver responded. Activity retains delivery details. A command
 with a missing final ACK is `unknown`, never blindly replayed. Offline readiness
 failures can use configured retry intervals. No cloud API is involved.
 
@@ -34,6 +36,52 @@ rf_authorized and rf_enabled gates must both be set; the browser cannot set thes
 flags. Firmware accepts the local command port only from Argus 192.168.1.149.
 This is a narrow IP allowlist, not cryptographic authentication. Keep that Argus
 address reserved. The original stock rollback package remains unchanged.
+
+## Dashboard and sensor history
+
+The default **Dashboard** tab is your own selection of devices/groups and sensors.
+Choose **Customize dashboard**, check the items to include, and use the up/down
+buttons to arrange them. Uncheck or remove an item to hide its tile. **Save
+dashboard** stores both selection and order on Argus, shared across browsers and
+phones and retained across service restarts. Cancel leaves the saved selection
+unchanged. Removing a tile does not delete a device or change automations.
+Automatic updates preserve horizontal table scrolling and vertical page position
+within the current tab, as well as scroll positions in the customization lists.
+
+The **Devices** tab lists all devices alphabetically using Swedish name ordering,
+with compact cards, the last recorded state, and ON/OFF/DIM controls. The overview
+counts and enabled-RF banner have been removed. **Next scheduled action** appears
+only on the **Schedules** tab. RF controls remain disabled if RF is unavailable.
+
+On **Sensors**, choose **Show history** for separate temperature and humidity
+graphs, then select 24 hours, 7 days, 30 days or 90 days. Point at or touch a graph
+to inspect the nearest reading. Times use the configured home time zone. Missing
+humidity remains missing; gaps longer than fifteen minutes (or three aggregate
+intervals for longer ranges) break the plotted line. A sensor tile on Dashboard
+also links to its history on Sensors.
+
+Valid local Fine Offset receptions now populate the private SQLite
+`sensor_history` table. It retains the latest reading of each field per minute
+for 90 days; larger chart ranges are returned as labeled averages in at most
+1441 buckets. History is fetched only when expanded and refreshed once a minute.
+On the first upgrade start, the remaining valid matching observations in the
+old 1000-frame radio buffer are recovered with their original reception times.
+Older discarded readings cannot be reconstructed. Imported account values are
+not fabricated into local history. History is included in normal database backups.
+
+`GET /api/sensors/<id>/history?hours=24` serves a validated history range.
+`POST /api/dashboard` saves `{"items":[{"kind":"devices","id":"..."},
+{"kind":"sensors","id":"..."}]}` under the existing Host/Origin/CSRF checks.
+The `dashboard_items` setting stores the ordered selection; deleted records are
+omitted automatically. These preferences do not modify scheduler or RF settings.
+
+Verified on 2026-11-19: 96 tests pass; isolated browser checks exercised mixed
+selection, ordering, save/reload/cancel, alphabetical compact cards, separate
+graphs, range changes, refresh persistence, and mobile layout. Production LAN,
+mDNS and Tailscale APIs remain available; the receiver is listening and scheduler
+and RF settings remain enabled. A private database backup was created before the
+service restart. QA uses an isolated private database with no radio or engine
+threads; no test command was transmitted.
 
 ## Imported account records
 

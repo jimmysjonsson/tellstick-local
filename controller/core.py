@@ -43,6 +43,9 @@ class Store:
               due REAL,status TEXT,attempts INTEGER,retries INTEGER,interval INTEGER,repeats INTEGER,message TEXT,updated REAL);
             CREATE INDEX IF NOT EXISTS due_actions ON actions(status,due);
             CREATE TABLE IF NOT EXISTS observations(id INTEGER PRIMARY KEY,received REAL,kind TEXT,data TEXT);
+            CREATE TABLE IF NOT EXISTS sensor_history(sensor TEXT,recorded INTEGER,temp REAL,humidity REAL,
+              PRIMARY KEY(sensor,recorded));
+            CREATE INDEX IF NOT EXISTS sensor_history_time ON sensor_history(recorded);
             ''')
         self.path.chmod(0o600)
 
@@ -81,6 +84,57 @@ class Store:
 
     def set(self, key, value):
         with self.connect() as db:db.execute('INSERT OR REPLACE INTO settings VALUES(?,?)',(key,json.dumps(value)))
+
+    def dashboard(self):
+        # Deleting a device must not leave a broken tile or reorder other tiles.
+        available={kind:{str(item['id']) for item in self.list(kind)} for kind in ('devices','sensors')}
+        return [item for item in self.setting('dashboard_items',[])
+                if item['id'] in available.get(item['kind'],set())]
+
+    def save_dashboard(self, items):
+        if not isinstance(items,list) or len(items)>500:raise ValueError('Invalid dashboard selection')
+        selection=[];seen=set()
+        for item in items:
+            if not isinstance(item,dict) or set(item)!={'kind','id'}:raise ValueError('Invalid dashboard item')
+            kind=item['kind'];ident=item['id']
+            if kind not in ('devices','sensors') or not isinstance(ident,str):raise ValueError('Invalid dashboard item')
+            self.get(kind,ident)
+            key=(kind,ident)
+            if key in seen:raise ValueError('Duplicate dashboard item')
+            seen.add(key);selection.append({'kind':kind,'id':ident})
+        self.set('dashboard_items',selection)
+        return selection
+
+    def record_sensor_reading(self, sensor, received, temp=None, humidity=None):
+        """Keep the latest real reading per minute, for ninety days."""
+        if not math.isfinite(received):raise ValueError('Invalid reading time')
+        for value in (temp,humidity):
+            if value is not None and (isinstance(value,bool) or not math.isfinite(value)):
+                raise ValueError('Invalid sensor reading')
+        if temp is None and humidity is None:return
+        minute=int(received)//60*60
+        with self.connect() as db:
+            db.execute('''INSERT INTO sensor_history VALUES(?,?,?,?)
+              ON CONFLICT(sensor,recorded) DO UPDATE SET
+              temp=COALESCE(excluded.temp,sensor_history.temp),
+              humidity=COALESCE(excluded.humidity,sensor_history.humidity)''',
+              (str(sensor),minute,temp,humidity))
+            db.execute('DELETE FROM sensor_history WHERE recorded<?',(minute-90*86400,))
+
+    def sensor_history(self, sensor, hours=24, now=None):
+        self.get('sensors',sensor)
+        if hours not in (24,168,720,2160):raise ValueError('Choose 24 hours, 7 days, 30 days or 90 days')
+        now=time.time() if now is None else now
+        # At most 1441 time buckets per response, including partial edge buckets.
+        interval=max(60,math.ceil(hours*3600/1440/60)*60)
+        with self.connect() as db:
+            rows=db.execute('''SELECT CAST(recorded / ? AS INTEGER)*? AS time,
+              AVG(temp) AS temp, AVG(humidity) AS humidity
+              FROM sensor_history WHERE sensor=? AND recorded>=? AND recorded<=?
+              GROUP BY CAST(recorded / ? AS INTEGER) ORDER BY time''',
+              (interval,interval,str(sensor),now-hours*3600,now,interval)).fetchall()
+        return {'sensorId':str(sensor),'hours':hours,'interval':interval,
+                'from':now-hours*3600,'until':now,'points':[dict(row) for row in rows]}
 
     def save(self, kind, record):
         if kind not in KINDS:raise ValueError('Unknown record type')
@@ -132,6 +186,7 @@ class Store:
                 if any(str(a.get('deviceId'))==ident for a in e.get('action',[])):raise ValueError('Remove linked event actions first')
         with self.connect() as db:
             db.execute('DELETE FROM items WHERE kind=? AND id=?',(kind,ident))
+            if kind=='sensors':db.execute('DELETE FROM sensor_history WHERE sensor=?',(ident,))
             db.execute("UPDATE actions SET status='cancelled',message='Record deleted' WHERE source=? AND status='pending'",(kind.rstrip('s')+':'+ident,))
 
     def import_export(self,path):
