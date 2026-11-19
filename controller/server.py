@@ -50,7 +50,7 @@ class Controller:
         for target in targets:
             thread=threading.Thread(target=target,daemon=True);thread.start();self.threads.append(thread)
 
-    def snapshot(self):
+    def snapshot(self,profile=None):
         now=time.time();store=self.store
         schedules=store.list('schedules')
         for job in schedules:
@@ -65,7 +65,8 @@ class Controller:
             observations=[dict(r) for r in db.execute('SELECT id,received,kind,data FROM observations ORDER BY id DESC LIMIT 15')]
             for item in observations:item['data']=json.loads(item['data'])
         return {'devices':store.list('devices'),'sensors':store.list('sensors'),'schedules':schedules,'events':events,
-            'actions':actions,'observations':observations,'dashboard':store.dashboard(),'status':{
+            'actions':actions,'observations':observations,'dashboard':store.dashboard(profile),
+            'profile':store.profile(profile),'profiles':store.profiles(),'status':{
                 'hardware_mode':store.setting('hardware_mode','receive-only'),'rf_enabled':bool(store.setting('rf_authorized',False) and store.setting('rf_enabled',False)),'scheduler_enabled':store.setting('scheduler_enabled',True),
                 'scheduler_heartbeat':store.setting('scheduler_heartbeat'),'scheduler_error':store.setting('scheduler_error'),
                 'rule_errors':store.setting('rule_errors',[]),
@@ -76,9 +77,13 @@ class Controller:
 
     def mutate(self,path,data):
         parts=path.strip('/').split('/')
+        if parts==['api','profile']:
+            if set(data)!={'name'}:raise ValueError('Enter a user name')
+            profile=self.store.choose_profile(data['name'])
+            return {'profile':profile,'items':self.store.dashboard(profile['name'])}
         if parts==['api','dashboard']:
-            if set(data)!={'items'}:raise ValueError('Invalid dashboard selection')
-            return {'items':self.store.save_dashboard(data['items'])}
+            if set(data)!={'items','profile'}:raise ValueError('Choose a user and dashboard items')
+            return {'items':self.store.save_dashboard(data['items'],data['profile'])}
         if parts==['api','command']:
             ids=self.engine.enqueue(str(data['deviceId']),data['method'],data.get('value',0))
             return {'queued':ids,'physical_control':bool(self.store.setting('rf_enabled',False))}
@@ -147,8 +152,13 @@ def handler_for(controller,authority,trusted_origins=(),trusted_lan_origins=()):
             if not self.valid_host():self.send_error(403);return
             path=urlsplit(self.path).path
             if path=='/api/state':
-                state=controller.snapshot();state['csrf']=csrf
-                self.send(200,json.dumps(state).encode());return
+                try:
+                    profile=parse_qs(urlsplit(self.path).query).get('profile',[None])[0]
+                    state=controller.snapshot(profile);state['csrf']=csrf
+                    self.send(200,json.dumps(state).encode())
+                except ValueError:
+                    self.send(400,json.dumps({'error':'Invalid user name'}).encode())
+                return
             if path=='/api/health':
                 self.send(200,json.dumps({'ok':True,'heartbeat':controller.store.setting('scheduler_heartbeat'),'rf_enabled':bool(controller.store.setting('rf_enabled',False))}).encode());return
             parts=path.strip('/').split('/')

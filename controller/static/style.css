@@ -14,3 +14,5 @@
 @media(max-width:700px){.toolbar>input{width:145px}.toolbar .secondary{font-size:11px;padding:9px}.device-cards{grid-template-columns:1fr;gap:9px}.dashboard-editor-columns{grid-template-columns:1fr;gap:18px}#dashboard-options{max-height:28vh}#dashboard-order{max-height:30vh}.sensor-history{gap:12px}.sensor-card{padding:16px}.schedule-next{gap:5px}.schedule-next strong{width:100%}.sensor-cards{grid-template-columns:minmax(0,1fr)}.history-chart{padding:8px}.header-status{flex-shrink:0}.dashboard-cards{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:700px){.history-chart svg text{font-size:17px}}
 @media(max-width:700px){nav{scrollbar-width:none}nav::-webkit-scrollbar{display:none}}
+.profile-button{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#profile-editor{width:min(440px,94vw)}
+@media(max-width:700px){.profile-button{max-width:145px}.header-status{align-items:flex-end}}

@@ -10,6 +10,7 @@ import sqlite3
 import time
 import threading
 import uuid
+import unicodedata
 from zoneinfo import ZoneInfo
 
 UTC = timezone.utc
@@ -26,6 +27,14 @@ def integer(value, low, high, label):
 
 
 def enabled(value):return value in (1, '1', True)
+
+
+def profile_name(value):
+    if not isinstance(value,str):raise ValueError('Enter a name of 1 to 60 characters')
+    name=unicodedata.normalize('NFKC',value).strip()
+    if not name or len(name)>60 or not name.isprintable():raise ValueError('Enter a name of 1 to 60 printable characters')
+    name=' '.join(name.split())
+    return name,name.casefold()
 
 
 class Store:
@@ -46,7 +55,12 @@ class Store:
             CREATE TABLE IF NOT EXISTS sensor_history(sensor TEXT,recorded INTEGER,temp REAL,humidity REAL,
               PRIMARY KEY(sensor,recorded));
             CREATE INDEX IF NOT EXISTS sensor_history_time ON sensor_history(recorded);
+            CREATE TABLE IF NOT EXISTS dashboard_profiles(name_key TEXT PRIMARY KEY,name TEXT NOT NULL,items TEXT NOT NULL);
             ''')
+            # Preserve the existing shared selection as Jimmy's profile. Never
+            # overwrite a later personal edit or assign it to every new visitor.
+            db.execute('''INSERT OR IGNORE INTO dashboard_profiles(name_key,name,items)
+              SELECT 'jimmy','Jimmy',value FROM settings WHERE key='dashboard_items' ''')
         self.path.chmod(0o600)
 
     @contextmanager
@@ -85,13 +99,37 @@ class Store:
     def set(self, key, value):
         with self.connect() as db:db.execute('INSERT OR REPLACE INTO settings VALUES(?,?)',(key,json.dumps(value)))
 
-    def dashboard(self):
+    def profiles(self):
+        with self.connect() as db:
+            return [{'name':row['name']} for row in db.execute('SELECT name FROM dashboard_profiles ORDER BY name_key')]
+
+    def profile(self, name):
+        if name is None:return None
+        _,key=profile_name(name)
+        with self.connect() as db:
+            row=db.execute('SELECT name FROM dashboard_profiles WHERE name_key=?',(key,)).fetchone()
+        return {'name':row['name']} if row else None
+
+    def choose_profile(self, name):
+        name,key=profile_name(name)
+        with self.connect() as db:
+            db.execute('INSERT OR IGNORE INTO dashboard_profiles VALUES(?,?,?)',(key,name,'[]'))
+        return self.profile(name)
+
+    def dashboard(self, profile=None):
+        if profile is None:return []
+        _,key=profile_name(profile)
+        with self.connect() as db:
+            row=db.execute('SELECT items FROM dashboard_profiles WHERE name_key=?',(key,)).fetchone()
+        if not row:return []
         # Deleting a device must not leave a broken tile or reorder other tiles.
         available={kind:{str(item['id']) for item in self.list(kind)} for kind in ('devices','sensors')}
-        return [item for item in self.setting('dashboard_items',[])
+        return [item for item in json.loads(row['items'])
                 if item['id'] in available.get(item['kind'],set())]
 
-    def save_dashboard(self, items):
+    def save_dashboard(self, items, profile=None):
+        if profile is None or not self.profile(profile):raise ValueError('Choose a user before saving a dashboard')
+        _,profile_key=profile_name(profile)
         if not isinstance(items,list) or len(items)>500:raise ValueError('Invalid dashboard selection')
         selection=[];seen=set()
         for item in items:
@@ -102,7 +140,8 @@ class Store:
             key=(kind,ident)
             if key in seen:raise ValueError('Duplicate dashboard item')
             seen.add(key);selection.append({'kind':kind,'id':ident})
-        self.set('dashboard_items',selection)
+        with self.connect() as db:
+            db.execute('UPDATE dashboard_profiles SET items=? WHERE name_key=?',(json.dumps(selection),profile_key))
         return selection
 
     def record_sensor_reading(self, sensor, received, temp=None, humidity=None):

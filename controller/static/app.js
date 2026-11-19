@@ -1,5 +1,8 @@
 'use strict';
-let state=null,tab='dashboard',editing=null,csrf='',busy=false,dashboardDraft=[];
+let state=null,tab='dashboard',editing=null,csrf='',busy=false,dashboardDraft=[],dashboardDraftProfile=null;
+let profileName='',profilePrompted=false;
+const profileStorageKey='tellstick.profile.v1';
+try{const saved=localStorage.getItem(profileStorageKey);if(saved&&saved.length<=60)profileName=saved}catch{}
 const $=s=>document.querySelector(s);
 const h=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const on=v=>v===true||v===1||v==='1';
@@ -14,7 +17,17 @@ function dateText(seconds,full=false){if(!seconds)return '—';return new Intl.D
 function timeText(seconds){return new Intl.DateTimeFormat('en-GB',{timeZone:state.status.timezone,hour:'2-digit',minute:'2-digit'}).format(new Date(seconds*1000))}
 function toast(text){$('#toast').textContent=text;$('#toast').classList.add('show');setTimeout(()=>$('#toast').classList.remove('show'),4500)}
 async function post(path,data){const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:JSON.stringify(data)});const value=await response.json();if(!response.ok)throw new Error(value.error||'Operation failed');return value}
-async function refresh(){if(busy)return;busy=true;try{const response=await fetch('/api/state');if(!response.ok)throw new Error('Controller unavailable');state=await response.json();csrf=state.csrf;render()}catch(error){$('#service-status').textContent='Connection unavailable';$('#service-status').className='pill warn'}finally{busy=false}}
+async function refresh(){
+  if(busy)return;busy=true;const requestedProfile=profileName;
+  try{
+    const response=await fetch('/api/state'+(requestedProfile?'?profile='+encodeURIComponent(requestedProfile):''));
+    if(!response.ok)throw new Error('Controller unavailable');
+    const nextState=await response.json();
+    if(requestedProfile!==profileName)return;
+    state=nextState;csrf=state.csrf;render();
+  }catch(error){$('#service-status').textContent='Connection unavailable';$('#service-status').className='pill warn'}
+  finally{busy=false}
+}
 function switchTab(value){tab=value;$('#search').value='';if(state)render()}
 function render(){
   const s=state.status;
@@ -27,15 +40,19 @@ function render(){
   $('#pause').textContent=s.scheduler_enabled?'Pause automations':'Resume automations';
   $('#receiver-status').textContent=`Receiver: ${s.receiver_status}${s.receiver_last_event?' · last frame '+timeText(s.receiver_last_event):''}`;
   $('#clock').textContent=dateText(s.now,true);$('#search').placeholder=`Search ${names[tab].toLowerCase()}…`;
+  $('#profile').disabled=false;$('#profile').textContent=state.profile?'User: '+state.profile.name:'Choose user';
+  $('#profile').title=state.profile?'Change user (currently '+state.profile.name+')':'Choose user';
+  $('#customize').disabled=!state.profile;
   $('#customize').hidden=tab!=='dashboard';$('#add').hidden=!['devices','schedules','events'].includes(tab);
   $('#add').textContent='+ Add '+({devices:'device',schedules:'schedule',events:'event'}[tab]||'');
   document.querySelectorAll('nav button').forEach(b=>{b.classList.toggle('selected',b.dataset.tab===tab);b.setAttribute('aria-current',b.dataset.tab===tab?'page':'false')});
   if(!document.activeElement?.matches('#content select'))renderContent();
+  if(!state.profile&&!profilePrompted)openProfile();
 }
 function filtered(items,text){const q=$('#search').value.toLocaleLowerCase();return items.filter(x=>String(text(x)).toLocaleLowerCase().includes(q))}
 function deviceCard(d,editable=true){
   const label=action(d.state)+(Number(d.state)===16&&d.statevalue!=null?' · '+Math.round(Number(d.statevalue)/255*100)+'%':'');
-  return `<article class="card device-card" data-device-card="${h(d.id)}"><div class="card-top"><div class="device-icon" aria-hidden="true">${d.protocol==='group'?'▦':'◈'}</div><div class="card-name"><h3>${h(d.name)}</h3><p class="detail">${h(d.protocol==='group'?'Group':d.protocol+' · '+(d.model||'switch'))}</p></div>${editable?`<button class="edit-icon" data-edit="${h(d.id)}" aria-label="Edit ${h(d.name)}">⋯</button>`:''}</div><div class="device-actions"><span class="pill gray device-state">${h(label)}</span><div class="controls"><button data-command="1" data-device="${h(d.id)}" aria-label="Turn ${h(d.name)} on" ${state.status.rf_enabled?'':'disabled'}>On</button><button data-command="2" data-device="${h(d.id)}" aria-label="Turn ${h(d.name)} off" ${state.status.rf_enabled?'':'disabled'}>Off</button>${Number(d.methods)&16?`<button data-command="16" data-device="${h(d.id)}" aria-label="Dim ${h(d.name)}" ${state.status.rf_enabled?'':'disabled'}>Dim…</button>`:''}</div></div></article>`;
+  return `<article class="card device-card" data-device-card="${h(d.id)}"><div class="card-top"><div class="device-icon" aria-hidden="true">${d.protocol==='group'?'▦':'◈'}</div><div class="card-name"><h3>${h(d.name)}</h3>${editable?`<p class="detail">${h(d.protocol==='group'?'Group':d.protocol+' · '+(d.model||'switch'))}</p>`:''}</div>${editable?`<button class="edit-icon" data-edit="${h(d.id)}" aria-label="Edit ${h(d.name)}">⋯</button>`:''}</div><div class="device-actions"><span class="pill gray device-state">${h(label)}</span><div class="controls"><button data-command="1" data-device="${h(d.id)}" aria-label="Turn ${h(d.name)} on" ${state.status.rf_enabled?'':'disabled'}>On</button><button data-command="2" data-device="${h(d.id)}" aria-label="Turn ${h(d.name)} off" ${state.status.rf_enabled?'':'disabled'}>Off</button>${Number(d.methods)&16?`<button data-command="16" data-device="${h(d.id)}" aria-label="Dim ${h(d.name)}" ${state.status.rf_enabled?'':'disabled'}>Dim…</button>`:''}</div></div></article>`;
 }
 function sensorCard(s,withHistory=false){
   const data=Object.fromEntries((s.data||[]).map(x=>[x.name,x.value]));
@@ -98,8 +115,9 @@ function renderContent(){
   const listScroll=new Map([...content.querySelectorAll('[data-scroll-key]')].map(element=>
     [element.dataset.scrollKey,{left:element.scrollLeft,top:element.scrollTop}]));
   if(tab==='dashboard'){
-    items=filtered(state.dashboard||[],item=>item.kind==='devices'?deviceName(item.id):sensorName(item.id));
+    items=filtered(state.profile?state.dashboard:[],item=>item.kind==='devices'?deviceName(item.id):sensorName(item.id));
     content.innerHTML=items.length?'<div class="cards dashboard-cards">'+items.map(item=>{const record=state[item.kind].find(r=>String(r.id)===item.id);return record?(item.kind==='devices'?deviceCard(record,false):sensorCard(record)):''}).join('')+'</div>':`<div class="empty">${$('#search').value?'No matching dashboard items.':'Make this dashboard yours. Choose devices and sensors, then arrange them in your own order.'}<p><button class="primary" data-customize>Choose items</button></p></div>`;
+    if(!state.profile)content.innerHTML='<div class="empty">Choose your name to open your personal Dashboard.<p><button class="primary" data-choose-profile>Choose user</button></p></div>';
   }
   else if(tab==='devices'){
     items=byName(filtered(items,d=>d.name+' '+d.protocol+' '+d.model));
@@ -122,6 +140,7 @@ function renderContent(){
     items=filtered(state.actions,a=>deviceName(a.device)+' '+a.source+' '+a.status);content.innerHTML='<div class="panel" data-scroll-key="activity-table"><table><thead><tr><th>Time</th><th>Device / action</th><th>Source</th><th>Result</th></tr></thead><tbody>'+items.map(a=>`<tr><td>${h(dateText(a.updated))}</td><td><strong>${h(deviceName(a.device))}</strong><small>${h(action(a.method))}</small></td><td>${h(a.source==='manual'?'Manual':a.source.startsWith('schedule:')?'Schedule':'Event')}</td><td><strong class="status-${h(a.status)}">${h(a.status)}</strong><small>${h(a.message)}</small></td></tr>`).join('')+'</tbody></table></div><h3>Recent radio frames</h3><p class="muted">Recent radio observations from the local receiver.</p><div class="cards">'+state.observations.slice(0,6).map(o=>`<article class="card"><h3>${h(o.data.protocol||'Unknown protocol')}</h3><p class="detail">${h(dateText(o.received))} · ${h(o.kind)}</p><p class="data-preview">${h(Object.keys(o.data).join(' · '))}</p></article>`).join('')+'</div>';
   }
   if(!items.length&&!['activity','dashboard','schedules'].includes(tab))content.innerHTML='<div class="empty">No '+h(names[tab].toLowerCase())+' found. '+(['devices','events'].includes(tab)?'Add one to get started.':'Waiting for readings.')+'</div>';
+  content.querySelectorAll('[data-choose-profile]').forEach(b=>b.onclick=openProfile);
   content.querySelectorAll('[data-customize]').forEach(b=>b.onclick=customizeDashboard);
   content.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>edit(items.find(x=>String(x.id)===b.dataset.edit)));
   content.querySelectorAll('[data-command]').forEach(b=>b.onclick=async()=>{
@@ -148,7 +167,33 @@ function renderContent(){
   }
 }
 function itemName(item){return item.kind==='devices'?deviceName(item.id):sensorName(item.id)}
-function customizeDashboard(){dashboardDraft=structuredClone(state.dashboard||[]);$('#dashboard-search').value='';$('#dashboard-error').textContent='';renderDashboardEditor();$('#dashboard-editor').showModal()}
+function openProfile(){
+  if(!state)return;profilePrompted=true;
+  $('#profile-name').value=state.profile?.name||profileName;
+  $('#profile-names').innerHTML=(state.profiles||[]).map(p=>`<option value="${h(p.name)}"></option>`).join('');
+  $('#profile-error').textContent='';$('#profile-editor').showModal();$('#profile-name').select();
+}
+$('#profile').onclick=openProfile;
+$('#close-profile').onclick=$('#cancel-profile').onclick=()=>$('#profile-editor').close();
+$('#profile-form').onsubmit=async event=>{
+  event.preventDefault();$('#save-profile').disabled=true;
+  try{
+    const chosen=await post('/api/profile',{name:$('#profile-name').value});
+    profileName=chosen.profile.name;
+    try{localStorage.setItem(profileStorageKey,profileName)}catch{}
+    state.profile=chosen.profile;state.dashboard=chosen.items;
+    if(!state.profiles.some(p=>p.name===profileName))state.profiles.push(chosen.profile);
+    $('#profile-editor').close();switchTab('dashboard');await refresh();
+  }catch(error){$('#profile-error').textContent=error.message}
+  finally{$('#save-profile').disabled=false}
+};
+function customizeDashboard(){
+  if(!state.profile){openProfile();return}
+  dashboardDraftProfile=state.profile.name;dashboardDraft=structuredClone(state.dashboard||[]);
+  $('#dashboard-search').value='';$('#dashboard-error').textContent='';
+  $('#dashboard-editor-note').textContent='Choose devices and sensors, then arrange them in your preferred order. Saved for '+dashboardDraftProfile+' on all devices.';
+  renderDashboardEditor();$('#dashboard-editor').showModal();
+}
 function renderDashboardEditor(){
   const active=document.activeElement,optionsTop=$('#dashboard-options').scrollTop,orderTop=$('#dashboard-order').scrollTop,optionsLeft=$('#dashboard-options').scrollLeft,orderLeft=$('#dashboard-order').scrollLeft;
   const focus=active?.matches('[data-pick-id]')?{kind:active.dataset.pickKind,id:active.dataset.pickId}:null;
@@ -165,7 +210,7 @@ $('#dashboard-order').onclick=event=>{const b=event.target.closest('button');if(
 $('#dashboard-search').oninput=renderDashboardEditor;
 $('#customize').onclick=customizeDashboard;
 $('#close-dashboard').onclick=$('#cancel-dashboard').onclick=()=>$('#dashboard-editor').close();
-$('#dashboard-form').onsubmit=async event=>{event.preventDefault();$('#save-dashboard').disabled=true;try{const saved=await post('/api/dashboard',{items:dashboardDraft});state.dashboard=saved.items;$('#dashboard-editor').close();toast('Dashboard saved');renderContent()}catch(error){$('#dashboard-error').textContent=error.message}finally{$('#save-dashboard').disabled=false}};
+$('#dashboard-form').onsubmit=async event=>{event.preventDefault();$('#save-dashboard').disabled=true;try{const saved=await post('/api/dashboard',{items:dashboardDraft,profile:dashboardDraftProfile});if(state.profile?.name===dashboardDraftProfile)state.dashboard=saved.items;$('#dashboard-editor').close();toast('Dashboard saved');renderContent()}catch(error){$('#dashboard-error').textContent=error.message}finally{$('#save-dashboard').disabled=false}};
 function daysText(value){const days=String(value||'').split(',');return days.length===7?'Every day':days.map(x=>['','Mon','Tue','Wed','Thu','Fri','Sat','Sun'][Number(x)]).join(', ')}
 function triggerText(t){if(!t)return 'No trigger';if(t.type==='time')return `${String(t.hour).padStart(2,'0')}:${String(t.minute).padStart(2,'0')}`;if(t.type==='sensor')return `${sensorName(t.sensorId)} ${t.operator||'above'} ${t.value}`;if(t.type==='device')return deviceName(t.deviceId)+' '+action(t.method);if(t.type==='blockheater')return 'Block heater · needs local rule';return t.type}
 function input(label,name,value='',type='text',extra=''){return `<label>${h(label)}<input name="${h(name)}" type="${type}" value="${h(value)}" ${extra}></label>`}

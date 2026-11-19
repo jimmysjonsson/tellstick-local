@@ -19,6 +19,7 @@ class DashboardHistoryTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.path = Path(self.temp.name)/'private/controller.sqlite'
         self.store = Store(self.path)
+        self.store.choose_profile('Jimmy')
         self.store.save('devices', {'id':'one','name':'Lamp','protocol':'arctech'})
         self.store.save('devices', {'id':'two','name':'Other lamp','protocol':'arctech'})
         self.store.save('sensors', {'id':'one','name':'Room','protocol':'fineoffset','sensorId':'42','data':[]})
@@ -26,24 +27,24 @@ class DashboardHistoryTests(unittest.TestCase):
 
     def test_mixed_dashboard_order_survives_reopen_and_deleted_tiles(self):
         items = [{'kind':'sensors','id':'one'}, {'kind':'devices','id':'two'}, {'kind':'devices','id':'one'}]
-        self.store.save_dashboard(items)
+        self.store.save_dashboard(items, 'Jimmy')
         reopened = Store(self.path)
-        self.assertEqual(reopened.dashboard(), items)
+        self.assertEqual(reopened.dashboard('Jimmy'), items)
         reopened.delete('devices','two')
-        self.assertEqual(reopened.dashboard(), [items[0], items[2]])
-        reopened.save_dashboard([])
-        self.assertEqual(reopened.dashboard(), [])
+        self.assertEqual(reopened.dashboard('Jimmy'), [items[0], items[2]])
+        reopened.save_dashboard([], 'Jimmy')
+        self.assertEqual(reopened.dashboard('Jimmy'), [])
 
     def test_invalid_selection_is_atomic_and_does_not_change_other_settings(self):
         original = [{'kind':'devices','id':'one'}]
-        self.store.save_dashboard(original)
+        self.store.save_dashboard(original, 'Jimmy')
         self.store.set('scheduler_enabled',True)
         for value in (None, {}, original*2, [{'kind':'events','id':'one'}],
                       [{'kind':'devices','id':'missing'}], [{'kind':'devices','id':1}],
                       [{'kind':'devices','id':'one','extra':1}], [{'kind':[],'id':'one'}]):
             with self.subTest(value=value), self.assertRaises(ValueError):
-                self.store.save_dashboard(value)
-            self.assertEqual(self.store.dashboard(),original)
+                self.store.save_dashboard(value, 'Jimmy')
+            self.assertEqual(self.store.dashboard('Jimmy'),original)
         self.assertTrue(self.store.setting('scheduler_enabled'))
         with self.store.connect() as db:
             self.assertEqual(db.execute('SELECT COUNT(*) FROM actions').fetchone()[0],0)
@@ -106,8 +107,8 @@ class DashboardHistoryTests(unittest.TestCase):
     def test_api_history_and_dashboard_keep_host_validation(self):
         app = Controller(self.path, provider=MagicMock())
         items = [{'kind':'sensors','id':'one'}]
-        app.mutate('/api/dashboard', {'items':items})
-        self.assertEqual(app.snapshot()['dashboard'],items)
+        app.mutate('/api/dashboard', {'profile':'Jimmy','items':items})
+        self.assertEqual(app.snapshot('Jimmy')['dashboard'],items)
         self.store.record_sensor_reading('one',self.now-60,temp=21.5)
         handler = object.__new__(handler_for(app,'127.0.0.1:8768'))
         handler.headers=Message();handler.headers['Host']='127.0.0.1:8768'
@@ -124,3 +125,75 @@ class DashboardHistoryTests(unittest.TestCase):
         self.assertEqual(handler.send.call_args.args[0],400)
         handler.send.reset_mock();handler.headers.replace_header('Host','untrusted.local')
         handler.do_GET();handler.send_error.assert_called_once_with(403);handler.send.assert_not_called()
+
+
+class PersonalProfileTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.path = Path(self.temp.name)/'private/controller.sqlite'
+        self.store = Store(self.path)
+        self.store.save('devices',{'id':'lamp','name':'Lamp','protocol':'arctech'})
+        self.store.save('sensors',{'id':'room','name':'Room','data':[]})
+        self.items=[{'kind':'devices','id':'lamp'},{'kind':'sensors','id':'room'}]
+
+    def test_existing_shared_dashboard_becomes_jimmy_without_overwriting_edits(self):
+        self.store.set('dashboard_items',self.items)
+        migrated=Store(self.path)
+        self.assertEqual(migrated.profile('Jimmy'),{'name':'Jimmy'})
+        self.assertEqual(migrated.dashboard('Jimmy'),self.items)
+        self.assertEqual(migrated.dashboard(),[])
+        migrated.choose_profile('Anna')
+        self.assertEqual(migrated.dashboard('Anna'),[])
+        migrated.save_dashboard(list(reversed(self.items)),'Jimmy')
+        self.assertEqual(Store(self.path).dashboard('Jimmy'),list(reversed(self.items)))
+        migrated.save_dashboard([],'Jimmy')
+        self.assertEqual(Store(self.path).dashboard('Jimmy'),[])
+        self.assertEqual(migrated.setting('dashboard_items'),self.items)
+
+    def test_profiles_isolate_selection_order_and_survive_new_clients(self):
+        self.store.choose_profile('Jimmy');self.store.choose_profile('Anna')
+        self.store.save_dashboard(self.items,'Jimmy')
+        self.store.save_dashboard([self.items[1]],'Anna')
+        client_two=Store(self.path)
+        self.assertEqual(client_two.dashboard('jimmy'),self.items)
+        self.assertEqual(client_two.dashboard('ANNA'),[self.items[1]])
+        client_two.save_dashboard([],'Anna')
+        self.assertEqual(self.store.dashboard('Jimmy'),self.items)
+        self.assertEqual(self.store.dashboard('Anna'),[])
+        with self.store.connect() as db:
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM actions').fetchone()[0],0)
+
+    def test_names_are_normalized_and_missing_profiles_cannot_save(self):
+        self.store.choose_profile('Jimmy')
+        self.assertEqual(self.store.choose_profile('  JIMMY  '),{'name':'Jimmy'})
+        self.assertEqual(len(self.store.profiles()),1)
+        self.store.choose_profile('Åsa')
+        self.assertEqual(self.store.choose_profile('A\u030asa'),{'name':'Åsa'})
+        self.store.choose_profile('Anna   Maria')
+        self.assertEqual(self.store.profile('anna maria'),{'name':'Anna Maria'})
+        for name in (None,[],True,'','  ','a'*61,'Jo\nhn'):
+            with self.subTest(name=name),self.assertRaises(ValueError):self.store.choose_profile(name)
+        for name in (None,'Unknown'):
+            with self.assertRaises(ValueError):self.store.save_dashboard(self.items,name)
+
+    def test_profile_apis_select_only_requested_dashboard(self):
+        app=Controller(self.path,provider=MagicMock())
+        chosen=app.mutate('/api/profile',{'name':'Jimmy'})
+        self.assertEqual(chosen,{'profile':{'name':'Jimmy'},'items':[]})
+        app.mutate('/api/dashboard',{'profile':'Jimmy','items':self.items})
+        app.mutate('/api/profile',{'name':'Anna'})
+        self.assertEqual(app.snapshot('Anna')['dashboard'],[])
+        self.assertEqual(app.snapshot()['dashboard'],[])
+        self.assertEqual(app.snapshot('jimmy')['dashboard'],self.items)
+        self.assertEqual(app.snapshot('jimmy')['profile'],{'name':'Jimmy'})
+        with self.assertRaises(ValueError):app.mutate('/api/dashboard',{'items':[]})
+        handler=object.__new__(handler_for(app,'127.0.0.1:8768'))
+        handler.headers=Message();handler.headers['Host']='127.0.0.1:8768'
+        handler.send=MagicMock();handler.send_error=MagicMock()
+        handler.path='/api/state?profile=Jimmy';handler.do_GET()
+        self.assertEqual(json.loads(handler.send.call_args.args[1])['dashboard'],self.items)
+        handler.path='/api/state?profile=Anna';handler.do_GET()
+        self.assertEqual(json.loads(handler.send.call_args.args[1])['dashboard'],[])
+        handler.path='/api/state?profile='+('a'*61);handler.do_GET()
+        self.assertEqual(handler.send.call_args.args[0],400)

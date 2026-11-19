@@ -39,12 +39,21 @@ address reserved. The original stock rollback package remains unchanged.
 
 ## Dashboard and sensor history
 
-The default **Dashboard** tab is your own selection of devices/groups and sensors.
-Choose **Customize dashboard**, check the items to include, and use the up/down
-buttons to arrange them. Uncheck or remove an item to hide its tile. **Save
-dashboard** stores both selection and order on Argus, shared across browsers and
-phones and retained across service restarts. Cancel leaves the saved selection
-unchanged. Removing a tile does not delete a device or change automations.
+The default **Dashboard** tab is personal to a named user. Choose **User** in the
+header and enter your name; no password is required. Use the same name on another
+phone, browser, or LAN/Tailscale address to load the same Dashboard. The browser
+remembers your last chosen name for that address. Use **User** again to switch.
+Names are case-insensitive, with surrounding/repeated spaces normalized.
+
+The previously shared Dashboard is preserved as **Jimmy**. Other new names start
+empty. Choose **Customize dashboard**, check devices/groups and sensors, and use
+up/down buttons to arrange them. **Save dashboard** stores the selection and order
+on Argus for the current name, across devices and service restarts. Cancel leaves
+it unchanged. Removing a tile does not delete a device or change automations.
+
+These names select personal layouts; they are not authenticated accounts or access
+controls. Anyone with dashboard access can select an existing name. Devices,
+schedules, events, controls and sensor data remain shared on the trusted network.
 Automatic updates preserve horizontal table scrolling and vertical page position
 within the current tab, as well as scroll positions in the customization lists.
 
@@ -70,10 +79,21 @@ Older discarded readings cannot be reconstructed. Imported account values are
 not fabricated into local history. History is included in normal database backups.
 
 `GET /api/sensors/<id>/history?hours=24` serves a validated history range.
-`POST /api/dashboard` saves `{"items":[{"kind":"devices","id":"..."},
+`GET /api/state?profile=Jimmy` returns that user's Dashboard alongside shared data;
+without a selected profile it returns an empty Dashboard. `POST /api/profile` with
+`{"name":"Jimmy"}` chooses or creates a profile. `POST /api/dashboard` saves
+`{"profile":"Jimmy","items":[{"kind":"devices","id":"..."},
 {"kind":"sensors","id":"..."}]}` under the existing Host/Origin/CSRF checks.
-The `dashboard_items` setting stores the ordered selection; deleted records are
-omitted automatically. These preferences do not modify scheduler or RF settings.
+The private `dashboard_profiles` table stores each normalized name's ordered
+selection. Deleted records are omitted automatically. The legacy `dashboard_items`
+setting is preserved for recovery and initially copied to Jimmy without overwriting
+later personal edits. These preferences do not modify scheduler or RF settings.
+
+The named-profile update passed 100 tests and a two-browser check: independent
+users, the same name on another browser, live synchronization, remembered names,
+case/space normalization, cancel, mobile layout and automatic-refresh scroll
+preservation. Production checks confirmed Jimmy's five pre-existing tiles and
+their exact order through LAN/mDNS/Tailscale, with scheduler and RF still enabled.
 
 Verified on 2026-11-19: 96 tests pass; isolated browser checks exercised mixed
 selection, ordering, save/reload/cancel, alphabetical compact cards, separate

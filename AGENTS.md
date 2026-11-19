@@ -121,7 +121,7 @@ Verified on 2026-11-19:
 - Experimental system `tellstick-local-dns.service`: **disabled and inactive**.
 - Firmware mode `X-TX1`; RF and scheduler enabled; receiver listening.
 - **40** devices/groups, **3** sensors, **47** schedules (**43** active), **1** event,
-  and **5** selected Dashboard tiles. These counts are observations, not invariants.
+  and **5** selected Dashboard tiles (subsequently assigned to **Jimmy**). These counts are observations, not invariants.
   The original import had 46 schedules, 42 active. Do not revert user additions.
 - The imported block-heater event was left disabled pending an explicit local rule.
   Do not approximate its heating behavior or silently activate unsupported triggers.
@@ -212,9 +212,19 @@ This is not currently automatic. Update all dependencies deliberately:
 
 - Default **Dashboard** tab contains an ordered selection of device/group and sensor
   tiles. **Customize dashboard** adds/removes items; up/down buttons set their order.
-  Selection/order are validated and stored in the database's `dashboard_items`
-  setting, shared across clients and persistent across restarts. Cancel does not
+  Each named user has a separate selection/order in `dashboard_profiles`, shared
+  only with clients choosing that name, and persistent across restarts. Names are
+  entered without passwords, case-insensitive and whitespace/Unicode normalized.
+  The browser remembers its last chosen name; another device can enter the same
+  name to load the same layout. The previous shared selection belongs to **Jimmy**;
+  new names start empty. Preserve the legacy `dashboard_items` setting as recovery
+  data and never overwrite Jimmy's later edits during migration. Cancel does not
   save; removing a tile does not delete the underlying device or automation.
+  Names are layout selectors, not authentication/access controls: people can select
+  each other's names. Devices, controls, automations and sensor data remain shared.
+  Do not add passwords unless the user requests them. Personal Dashboard device tiles
+  show names, states and controls without protocol/model details; retain those
+  details on the full Devices tab.
 - **Devices** is compact and alphabetically sorted with a Swedish numeric-aware
   collator. Show the last recorded state, without the old "Imported state" prose.
   Do not restore the enabled-RF banner or overview counts for devices/groups,
@@ -246,7 +256,10 @@ This is not currently automatic. Update all dependencies deliberately:
   Expanded histories refresh about once a minute, not on every state poll.
 - State API: `GET /api/state`; minimal health: `GET /api/health`.
   History: `GET /api/sensors/<id>/history?hours=24`.
-  Preferences: `POST /api/dashboard` with ordered `{kind,id}` items under `items`.
+  Profile selection: `POST /api/profile` with `{"name":"Jimmy"}`. State may use
+  `?profile=Jimmy`; without a chosen name the Dashboard is empty. Preferences:
+  `POST /api/dashboard` with `profile` and ordered `{kind,id}` items under `items`.
+  A save without an existing named profile is rejected; no global writes remain.
   Commands: `POST /api/command` — **transmits through the queue when authorized**.
   Mutations require exact Host/Origin and `X-CSRF-Token`; never use a real RF command
   as a CSRF/HTTP smoke test. Avoid printing complete `/api/state` responses.
@@ -359,8 +372,8 @@ python3 -m compileall -q controller tellstick_local
 git diff --check
 ```
 
-The last completed suite had **96 passing tests**, including new dashboard/history
-coverage. These tests use temporary databases/mocked transport; transmitter tests
+The last completed suite had **100 passing tests**, including dashboard/history
+and named-profile migration/isolation coverage. These tests use temporary databases/mocked transport; transmitter tests
 also compile an offline C harness with `cc`. Do not replace mocks with live radio
 calls. Run focused checks for small reversible changes and broader tests when
 backend behavior changes; do not claim tests were rerun for documentation alone.

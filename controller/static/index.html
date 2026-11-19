@@ -15,16 +15,26 @@
   <div class="aside-bottom"><span class="dot"></span> Completely local<small>Running on Argus<br>No cloud connection</small></div>
 </aside>
 <main>
-  <header><div><p class="eyebrow">YOUR HOME, ON YOUR NETWORK</p><h1 id="title">Dashboard</h1><p id="subtitle">Connecting to your local controller…</p></div><div class="header-status"><span id="service-status" class="pill">Connecting</span><button id="pause" class="secondary">Pause automations</button></div></header>
+  <header><div><p class="eyebrow">YOUR HOME, ON YOUR NETWORK</p><h1 id="title">Dashboard</h1><p id="subtitle">Connecting to your local controller…</p></div><div class="header-status"><span id="service-status" class="pill">Connecting</span><button id="profile" class="secondary profile-button" disabled>Choose user</button><button id="pause" class="secondary">Pause automations</button></div></header>
   <div class="notice" id="hardware-notice" hidden><strong>RF control unavailable</strong><span>Live readings remain available. Device controls are currently disabled.</span></div>
   <div class="toolbar"><input id="search" type="search" placeholder="Search dashboard…" aria-label="Search records"><div><button class="secondary" id="customize">Customize dashboard</button><button class="primary" id="add" hidden>+ Add device</button></div></div>
   <section id="content" aria-live="polite"><div class="empty">Loading your home…</div></section>
   <footer><span id="receiver-status">Receiver connecting…</span><span id="clock"></span></footer>
 </main>
+<dialog id="profile-editor" aria-labelledby="profile-title">
+  <form id="profile-form">
+    <div class="dialog-head"><h2 id="profile-title">Your dashboard</h2><button type="button" id="close-profile" aria-label="Close">×</button></div>
+    <p class="field-note">Enter the same name on each device to use your Dashboard. No password is required.</p>
+    <label>Your name<input id="profile-name" name="name" maxlength="60" required autocomplete="nickname" list="profile-names"></label>
+    <datalist id="profile-names"></datalist>
+    <p class="form-error" id="profile-error" role="alert"></p>
+    <div class="dialog-actions"><button type="button" id="cancel-profile" class="secondary">Cancel</button><button type="submit" id="save-profile" class="primary">Open dashboard</button></div>
+  </form>
+</dialog>
 <dialog id="dashboard-editor" aria-labelledby="dashboard-editor-title">
   <form id="dashboard-form">
     <div class="dialog-head"><h2 id="dashboard-editor-title">Customize dashboard</h2><button type="button" id="close-dashboard" aria-label="Close">×</button></div>
-    <p class="field-note">Choose devices and sensors, then arrange them in your preferred order. Saved for all your devices.</p>
+    <p class="field-note" id="dashboard-editor-note">Choose devices and sensors, then arrange them in your preferred order.</p>
     <div class="dashboard-editor-columns"><section><h3>Choose items</h3><input id="dashboard-search" type="search" placeholder="Find a device or sensor…" aria-label="Find dashboard items"><div id="dashboard-options"></div></section><section><h3>Your order</h3><div id="dashboard-order"></div></section></div>
     <p class="form-error" id="dashboard-error" role="alert"></p>
     <div class="dialog-actions"><button type="button" id="cancel-dashboard" class="secondary">Cancel</button><button type="submit" class="primary" id="save-dashboard">Save dashboard</button></div>
